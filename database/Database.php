@@ -11,12 +11,12 @@ class Database
     public function __construct()
     {
         $host = $_ENV['DB_HOST'] ?? 'localhost';
-        $dbname = $_ENV['DB_NAME'] ?? 'php_ioc_di';
+        $name = $_ENV['DB_NAME'] ?? 'php_ioc_di';
         $user = $_ENV['DB_USER'] ?? 'user';
         $pass = $_ENV['DB_PASS'] ?? 'Aa123123';
         $port = $_ENV['DB_PORT'] ?? '54328';
 
-        $dsn = "pgsql:host=$host;port=$port;dbname=$dbname";
+        $dsn = "pgsql:host=$host;port=$port;dbname=$name";
         $this->dbh = new PDO($dsn, $user, $pass);
     }
 
