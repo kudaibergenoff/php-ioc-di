@@ -1,0 +1,24 @@
+services:
+
+  db:
+    image: postgres:15.3-alpine3.18
+    restart: always
+    ports:
+      - "54328:5432"
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME} -h 127.0.0.1 -p 5432" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    container_name: php_ioc_di_db
+
+volumes:
+  pgdata:
