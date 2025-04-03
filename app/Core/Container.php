@@ -1,6 +1,6 @@
 <?php
 
-namespace Config;
+namespace App\Core;
 
 use ReflectionClass;
 
@@ -13,6 +13,9 @@ class Container
         return isset($this->objects[$id]) || class_exists($id);
     }
 
+    /**
+     * @throws \ReflectionException
+     */
     public function get(string $id): mixed
     {
         return isset($this->objects[$id]) ? $this->objects[$id]() : $this->prepareObject($id);
