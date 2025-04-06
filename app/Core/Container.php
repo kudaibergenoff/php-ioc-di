@@ -3,14 +3,16 @@
 namespace App\Core;
 
 use ReflectionClass;
+use ReflectionParameter;
 
 class Container
 {
     private array $objects = [];
+    private array $resolved = []; // Кэш для уже созданных объектов
 
     public function has(string $id): bool
     {
-        return isset($this->objects[$id]) || class_exists($id);
+        return isset($this->objects[$id]) || isset($this->resolved[$id]) || class_exists($id);
     }
 
     /**
@@ -18,7 +20,22 @@ class Container
      */
     public function get(string $id): mixed
     {
-        return isset($this->objects[$id]) ? $this->objects[$id]() : $this->prepareObject($id);
+        // Проверяем, есть ли объект в кэше
+        if (isset($this->resolved[$id])) {
+            return $this->resolved[$id];
+        }
+
+        // Проверяем, есть ли объект в контейнере как фабрика
+        if (isset($this->objects[$id])) {
+            $object = $this->objects[$id]();
+            $this->resolved[$id] = $object; // Кэшируем результат
+            return $object;
+        }
+
+        // Создаем и кэшируем новый объект
+        $object = $this->prepareObject($id);
+        $this->resolved[$id] = $object;
+        return $object;
     }
 
     /**
@@ -27,31 +44,52 @@ class Container
     private function prepareObject(string $class): object
     {
         $classReflector = new ReflectionClass($class);
-
-        // Получаем рефлектор конструктора класса, проверяем - есть ли конструктор
-        // Если конструктора нет - сразу возвращаем экземпляр класса
         $constructReflector = $classReflector->getConstructor();
-        if (empty($constructReflector)) {
+
+        // Если конструктора нет или он не имеет параметров
+        if (null === $constructReflector || empty($constructArguments = $constructReflector->getParameters())) {
             return new $class;
         }
 
-        // Получаем рефлекторы аргументов конструктора
-        // Если аргументов нет - сразу возвращаем экземпляр класса
-        $constructArguments = $constructReflector->getParameters();
-        if (empty($constructArguments)) {
-            return new $class;
-        }
+        // Собираем аргументы конструктора
+        $args = $this->resolveConstructorArguments($constructArguments);
 
-        // Перебираем все аргументы конструктора, собираем их значения
+        return new $class(...$args);
+    }
+
+    /**
+     * @param ReflectionParameter[] $constructArguments
+     * @return array
+     * @throws \ReflectionException
+     */
+    private function resolveConstructorArguments(array $constructArguments): array
+    {
         $args = [];
         foreach ($constructArguments as $argument) {
-            // Получаем тип аргумента
-            $argumentType = $argument->getType()->getName();
-            // Получаем сам аргумент по его типу из контейнера
+            $type = $argument->getType();
+
+            // Проверяем тип аргумента
+            if ($type === null || $type->isBuiltin()) {
+                // Для встроенных типов устанавливаем значение по умолчанию, если оно есть
+                if ($argument->isDefaultValueAvailable()) {
+                    $args[$argument->getName()] = $argument->getDefaultValue();
+                    continue;
+                }
+                throw new \RuntimeException("Не удается разрешить аргумент {$argument->getName()} без типа или со встроенным типом");
+            }
+
+            $argumentType = $type->getName();
             $args[$argument->getName()] = $this->get($argumentType);
         }
+        return $args;
+    }
 
-        // И возвращаем экземпляр класса со всеми зависимостями
-        return new $class(...$args);
+    /**
+     * Регистрирует фабрику объекта в контейнере
+     */
+    public function set(string $id, callable $factory): void
+    {
+        $this->objects[$id] = $factory;
+        unset($this->resolved[$id]); // Очищаем кэш, если был
     }
 }
